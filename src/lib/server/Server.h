@@ -300,7 +300,7 @@ private:
 
   // send computer options to \c client
   void sendOptions(BaseClientProxy *client) const;
-  bool returnTypingAllowed(BaseClientProxy *client) const;
+  uint32_t returnTypingOptions(BaseClientProxy *client) const;
   void updateReturnTyping() const;
 
   // process options from configuration

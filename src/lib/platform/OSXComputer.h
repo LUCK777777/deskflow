@@ -224,7 +224,7 @@ private:
 
   // true if mouse has entered the screen
   bool m_isOnComputer;
-  std::atomic<bool> m_returnTypingEnabled{false};
+  std::atomic<uint32_t> m_returnTypingOptions{0};
   // Only the event tap thread touches this bitset while it is running.
   std::bitset<128> m_returnTypingDown;
 
@@ -254,7 +254,8 @@ private:
   using MouseButtonEventMapType = std::map<uint16_t, CGEventType>;
   std::vector<MouseButtonEventMapType> MouseButtonEventMap;
 
-  bool m_cursorHidden;
+  enum class SecondaryCursor { Visible, Hidden, WakeRequested };
+  std::atomic<SecondaryCursor> m_secondaryCursor{SecondaryCursor::Visible};
 
   // keyboard stuff
   OSXKeyState *m_keyState;

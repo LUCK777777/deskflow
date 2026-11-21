@@ -22,6 +22,7 @@
 #include "deskflow/Clipboard.h"
 #include "deskflow/DisplayInvalidException.h"
 #include "deskflow/KeyMap.h"
+#include "deskflow/ProtocolTypes.h"
 #include "mt/CondVar.h"
 #include "mt/Lock.h"
 #include "mt/Mutex.h"
@@ -89,7 +90,6 @@ OSXComputer::OSXComputer(IEventQueue *events, bool isPrimary, bool enableLangSyn
       m_isOnComputer(m_isPrimary),
       m_cursorPosValid(false),
       MouseButtonEventMap(NumButtonIDs),
-      m_cursorHidden(false),
       m_keyState(nullptr),
       m_sequenceNumber(0),
       m_screensaver(nullptr),
@@ -645,6 +645,10 @@ void OSXComputer::fakeMouseWheel(ScrollDelta delta) const
 
 void OSXComputer::showCursor()
 {
+  if (!m_isPrimary && m_secondaryCursor == SecondaryCursor::Visible) {
+    return;
+  }
+
   LOG_DEBUG("showing cursor");
 
   CFStringRef propertyString = CFStringCreateWithCString(nullptr, "SetsCursorInBackground", kCFStringEncodingMacRoman);
@@ -656,18 +660,27 @@ void OSXComputer::showCursor()
   CGError error = CGDisplayShowCursor(m_displayID);
   if (error != kCGErrorSuccess) {
     LOG_ERR("failed to show cursor, error=%d", error);
+    if (!m_isPrimary) {
+      m_secondaryCursor = SecondaryCursor::Hidden;
+    }
+  } else if (!m_isPrimary) {
+    m_secondaryCursor = SecondaryCursor::Visible;
   }
 
   // appears to fix "mouse randomly not showing" bug
   CGAssociateMouseAndMouseCursorPosition(true);
 
   logCursorVisibility();
-
-  m_cursorHidden = false;
 }
 
 void OSXComputer::hideCursor()
 {
+  if (!m_isPrimary && m_secondaryCursor != SecondaryCursor::Visible) {
+    // An earlier hide is still in effect. Cancel a wake queued before this leave.
+    m_secondaryCursor = SecondaryCursor::Hidden;
+    return;
+  }
+
   LOG_DEBUG("hiding cursor");
 
   CFStringRef propertyString = CFStringCreateWithCString(nullptr, "SetsCursorInBackground", kCFStringEncodingMacRoman);
@@ -679,14 +692,14 @@ void OSXComputer::hideCursor()
   CGError error = CGDisplayHideCursor(m_displayID);
   if (error != kCGErrorSuccess) {
     LOG_ERR("failed to hide cursor, error=%d", error);
+  } else if (!m_isPrimary) {
+    m_secondaryCursor = SecondaryCursor::Hidden;
   }
 
   // appears to fix "mouse randomly not hiding" bug
   CGAssociateMouseAndMouseCursorPosition(true);
 
   logCursorVisibility();
-
-  m_cursorHidden = true;
 }
 
 void OSXComputer::enable()
@@ -708,6 +721,12 @@ void OSXComputer::enable()
     );
   } else {
     // FIXME -- prevent system from entering power save mode
+
+    m_events->addHandler(EventTypes::OsxComputerWakeCursor, getEventTarget(), [this](const auto &) {
+      if (m_secondaryCursor == SecondaryCursor::WakeRequested) {
+        showCursor();
+      }
+    });
 
     hideCursor();
 
@@ -760,7 +779,10 @@ void OSXComputer::disable()
   if (m_eventTapThread.joinable()) {
     m_eventTapThread.join();
   }
-  m_returnTypingEnabled = false;
+  if (!m_isPrimary) {
+    m_events->removeHandler(EventTypes::OsxComputerWakeCursor, getEventTarget());
+  }
+  m_returnTypingOptions = 0;
   m_returnTypingDown.reset();
 
   if (m_eventTapRLSR) {
@@ -793,7 +815,7 @@ void OSXComputer::disable()
 
 void OSXComputer::enter()
 {
-  m_returnTypingEnabled = false;
+  m_returnTypingOptions = 0;
   m_isOnComputer = true;
   showCursor();
 
@@ -883,16 +905,17 @@ void OSXComputer::screensaver(bool activate)
 
 void OSXComputer::resetOptions()
 {
-  m_returnTypingEnabled = false;
+  m_returnTypingOptions = 0;
 }
 
 void OSXComputer::setOptions(const OptionsList &options)
 {
   for (size_t i = 0; i + 1 < options.size(); i += 2) {
     if (options[i] == kOptionReturnTyping) {
-      m_returnTypingEnabled = !m_isPrimary && !m_isOnComputer && options[i + 1] != 0 &&
-                              Settings::value(Settings::Client::ReturnTyping).toBool() &&
-                              Settings::value(Settings::Security::TlsEnabled).toBool();
+      const bool enabled = !m_isPrimary && !m_isOnComputer && options[i + 1] != 0 &&
+                           Settings::value(Settings::Client::ReturnTyping).toBool() &&
+                           Settings::value(Settings::Security::TlsEnabled).toBool();
+      m_returnTypingOptions = enabled ? options[i + 1] : 0;
     }
   }
 }
@@ -1661,17 +1684,28 @@ bool OSXComputer::HotKeyItem::operator<(const HotKeyItem &x) const
   return (m_keycode < x.m_keycode || (m_keycode == x.m_keycode && m_mask < x.m_mask));
 }
 
-// Capture text taps on a Mac client only while the server invites them.
 CGEventRef
 OSXComputer::handleCGInputEventSecondary(CGEventTapProxy, CGEventType type, CGEventRef event, void *refcon)
 {
-  // Restrict return typing to events without an originating process.
-  if ((type != kCGEventKeyDown && type != kCGEventKeyUp) ||
+  const bool isKey = type == kCGEventKeyDown || type == kCGEventKeyUp;
+  if ((!isKey && type != kCGEventMouseMoved) ||
       CGEventGetIntegerValueField(event, kCGEventSourceUnixProcessID) != 0) {
     return event;
   }
 
   auto *computer = static_cast<OSXComputer *>(refcon);
+  if (!isKey) {
+    if (CGEventGetIntegerValueField(event, kCGMouseEventDeltaX) != 0 ||
+        CGEventGetIntegerValueField(event, kCGMouseEventDeltaY) != 0) {
+      auto hidden = SecondaryCursor::Hidden;
+      if (computer->m_secondaryCursor.compare_exchange_strong(hidden, SecondaryCursor::WakeRequested)) {
+        // Show the cursor on the same thread as enter() and leave().
+        computer->sendEvent(EventTypes::OsxComputerWakeCursor);
+      }
+    }
+    return event;
+  }
+
   const auto physicalKey = static_cast<size_t>(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
   if (physicalKey >= computer->m_returnTypingDown.size()) {
     return event;
@@ -1683,17 +1717,26 @@ OSXComputer::handleCGInputEventSecondary(CGEventTapProxy, CGEventType type, CGEv
     return wasForwarded ? nullptr : event;
   }
 
-  if (!wasForwarded && CGEventGetIntegerValueField(event, kCGKeyboardEventAutorepeat) != 0) {
+  const bool repeat = CGEventGetIntegerValueField(event, kCGKeyboardEventAutorepeat) != 0;
+  if (repeat && !wasForwarded) {
     return event;
   }
 
   constexpr auto shortcutModifiers = kCGEventFlagMaskCommand | kCGEventFlagMaskControl | kCGEventFlagMaskAlternate;
-  if (!computer->m_returnTypingEnabled || (CGEventGetFlags(event) & shortcutModifiers) != 0) {
-    return wasForwarded ? nullptr : event;
-  }
+  constexpr auto chordModifiers = shortcutModifiers | kCGEventFlagMaskShift | kCGEventFlagMaskSecondaryFn;
+  const auto modifiers = CGEventGetFlags(event);
+  const auto options = computer->m_returnTypingOptions.load();
 
   KeyID key = kKeyNone;
-  if (physicalKey == kVK_Return || physicalKey == kVK_ANSI_KeypadEnter) {
+  if ((options & kReturnTypingClipboardHistory) != 0 && physicalKey == kVK_ANSI_V &&
+      (modifiers & chordModifiers) == kCGEventFlagMaskCommand) {
+    if (repeat) {
+      return nullptr;
+    }
+    key = kReturnTypingClipboardHistoryCode;
+  } else if ((options & kReturnTypingText) == 0 || (modifiers & shortcutModifiers) != 0) {
+    return wasForwarded ? nullptr : event;
+  } else if (physicalKey == kVK_Return || physicalKey == kVK_ANSI_KeypadEnter) {
     key = kKeyReturn;
   } else if (physicalKey == kVK_Delete) {
     key = kKeyBackSpace;
@@ -1706,7 +1749,7 @@ OSXComputer::handleCGInputEventSecondary(CGEventTapProxy, CGEventType type, CGEv
     }
   }
 
-  if (!isReturnTypingKey(key)) {
+  if (!returnTypingCodeOffered(key, options)) {
     return wasForwarded ? nullptr : event;
   }
 

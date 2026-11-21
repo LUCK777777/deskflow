@@ -91,6 +91,7 @@ enum class EventTypes : uint32_t
   SocketDisconnected,
 
   OsxComputerConfirmSleep,
+  OsxComputerWakeCursor,
 
   /// This event is sent whenever a server accepts a client.
   ClientListenerAccepted,
