@@ -1082,7 +1082,7 @@ void Server::sendOptions(BaseClientProxy *client) const
 
   if (!m_returnTypingClient.empty() && getName(client) == m_returnTypingClient) {
     optionsList.push_back(kOptionReturnTyping);
-    optionsList.push_back(returnTypingAllowed(client));
+    optionsList.push_back(returnTypingOptions(client));
   }
 
   // send the options
@@ -1090,25 +1090,30 @@ void Server::sendOptions(BaseClientProxy *client) const
   client->setOptions(optionsList);
 }
 
-bool Server::returnTypingAllowed(BaseClientProxy *client) const
+uint32_t Server::returnTypingOptions(BaseClientProxy *client) const
 {
   if (m_returnTypingClient.empty() || m_active != m_primaryClient || m_activeSaver != nullptr) {
-    return false;
+    return 0;
   }
 
   const auto allowed = m_clients.find(m_returnTypingClient);
   if (allowed == m_clients.end() || allowed->second != client || client == m_primaryClient) {
-    return false;
+    return 0;
   }
 
   const auto *stream = dynamic_cast<const StreamFilter *>(client->getStream());
   const auto *socket = stream ? dynamic_cast<const SecureSocket *>(stream->getStream()) : nullptr;
-  return socket && socket->isPeerAuthenticated();
+  return socket && socket->isPeerAuthenticated() ? kReturnTypingText | kReturnTypingClipboardHistory : 0;
 }
 
 void Server::returnTyping(BaseClientProxy *client, KeyID key)
 {
-  if (isReturnTypingKey(key) && returnTypingAllowed(client)) {
+  if (!returnTypingCodeOffered(key, returnTypingOptions(client))) {
+    return;
+  }
+  if (key == kReturnTypingClipboardHistoryCode) {
+    m_primaryClient->returnTypingTap('v', KeyModifierSuper);
+  } else {
     m_primaryClient->returnTypingTap(key);
   }
 }
@@ -1122,7 +1127,7 @@ void Server::updateReturnTyping() const
   const auto found = m_clients.find(m_returnTypingClient);
   if (found != m_clients.end() && found->second != m_primaryClient) {
     auto *client = found->second;
-    client->setOptions({kOptionReturnTyping, returnTypingAllowed(client)});
+    client->setOptions({kOptionReturnTyping, returnTypingOptions(client)});
   }
 }
 

@@ -22,6 +22,7 @@
 #include "deskflow/Clipboard.h"
 #include "deskflow/DisplayInvalidException.h"
 #include "deskflow/KeyMap.h"
+#include "deskflow/ProtocolTypes.h"
 #include "mt/CondVar.h"
 #include "mt/Lock.h"
 #include "mt/Mutex.h"
@@ -781,7 +782,7 @@ void OSXComputer::disable()
   if (!m_isPrimary) {
     m_events->removeHandler(EventTypes::OsxComputerWakeCursor, getEventTarget());
   }
-  m_returnTypingEnabled = false;
+  m_returnTypingOptions = 0;
   m_returnTypingDown.reset();
 
   if (m_eventTapRLSR) {
@@ -814,7 +815,7 @@ void OSXComputer::disable()
 
 void OSXComputer::enter()
 {
-  m_returnTypingEnabled = false;
+  m_returnTypingOptions = 0;
   m_isOnComputer = true;
   showCursor();
 
@@ -904,16 +905,17 @@ void OSXComputer::screensaver(bool activate)
 
 void OSXComputer::resetOptions()
 {
-  m_returnTypingEnabled = false;
+  m_returnTypingOptions = 0;
 }
 
 void OSXComputer::setOptions(const OptionsList &options)
 {
   for (size_t i = 0; i + 1 < options.size(); i += 2) {
     if (options[i] == kOptionReturnTyping) {
-      m_returnTypingEnabled = !m_isPrimary && !m_isOnComputer && options[i + 1] != 0 &&
-                              Settings::value(Settings::Client::ReturnTyping).toBool() &&
-                              Settings::value(Settings::Security::TlsEnabled).toBool();
+      const bool enabled = !m_isPrimary && !m_isOnComputer && options[i + 1] != 0 &&
+                           Settings::value(Settings::Client::ReturnTyping).toBool() &&
+                           Settings::value(Settings::Security::TlsEnabled).toBool();
+      m_returnTypingOptions = enabled ? options[i + 1] : 0;
     }
   }
 }
@@ -1715,17 +1717,26 @@ OSXComputer::handleCGInputEventSecondary(CGEventTapProxy, CGEventType type, CGEv
     return wasForwarded ? nullptr : event;
   }
 
-  if (!wasForwarded && CGEventGetIntegerValueField(event, kCGKeyboardEventAutorepeat) != 0) {
+  const bool repeat = CGEventGetIntegerValueField(event, kCGKeyboardEventAutorepeat) != 0;
+  if (repeat && !wasForwarded) {
     return event;
   }
 
   constexpr auto shortcutModifiers = kCGEventFlagMaskCommand | kCGEventFlagMaskControl | kCGEventFlagMaskAlternate;
-  if (!computer->m_returnTypingEnabled || (CGEventGetFlags(event) & shortcutModifiers) != 0) {
-    return wasForwarded ? nullptr : event;
-  }
+  constexpr auto chordModifiers = shortcutModifiers | kCGEventFlagMaskShift | kCGEventFlagMaskSecondaryFn;
+  const auto modifiers = CGEventGetFlags(event);
+  const auto options = computer->m_returnTypingOptions.load();
 
   KeyID key = kKeyNone;
-  if (physicalKey == kVK_Return || physicalKey == kVK_ANSI_KeypadEnter) {
+  if ((options & kReturnTypingClipboardHistory) != 0 && physicalKey == kVK_ANSI_V &&
+      (modifiers & chordModifiers) == kCGEventFlagMaskCommand) {
+    if (repeat) {
+      return nullptr;
+    }
+    key = kReturnTypingClipboardHistoryCode;
+  } else if ((options & kReturnTypingText) == 0 || (modifiers & shortcutModifiers) != 0) {
+    return wasForwarded ? nullptr : event;
+  } else if (physicalKey == kVK_Return || physicalKey == kVK_ANSI_KeypadEnter) {
     key = kKeyReturn;
   } else if (physicalKey == kVK_Delete) {
     key = kKeyBackSpace;
@@ -1738,7 +1749,7 @@ OSXComputer::handleCGInputEventSecondary(CGEventTapProxy, CGEventType type, CGEv
     }
   }
 
-  if (!isReturnTypingKey(key)) {
+  if (!returnTypingCodeOffered(key, options)) {
     return wasForwarded ? nullptr : event;
   }
 

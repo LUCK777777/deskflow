@@ -318,7 +318,7 @@ void Client::resetOptions()
 {
   m_relativeMouseMoves = false;
   m_hasRelativeRestorePosition = false;
-  m_returnTypingOffered = false;
+  m_returnTypingOffered = 0;
   m_computer->resetOptions();
 }
 
@@ -345,7 +345,7 @@ void Client::setOptions(const OptionsList &options)
         m_maximumClipboardSize = *index;
       }
     } else if (id == kOptionReturnTyping) {
-      m_returnTypingOffered = *++index != 0;
+      m_returnTypingOffered = *++index;
     } else if (id == kOptionRelativeMouseMoves) {
       index++;
       if (index != options.end()) {
@@ -501,7 +501,7 @@ bool Client::setupComputer(int16_t protocolMinor)
 #if defined(__APPLE__)
     m_events->addHandler(EventTypes::KeyStateKeyDown, getEventTarget(), [this](const auto &event) {
       const auto *key = static_cast<const IKeyState::KeyInfo *>(event.getData());
-      if (m_ready && !m_active && m_useSecureNetwork && m_returnTypingOffered && isReturnTypingKey(key->m_key)) {
+      if (m_ready && !m_active && m_useSecureNetwork && returnTypingCodeOffered(key->m_key, m_returnTypingOffered)) {
         ProtocolUtil::writef(m_stream, kMsgDReturnTyping, key->m_key);
       }
     });
@@ -561,7 +561,7 @@ void Client::cleanupComputer()
 #if defined(__APPLE__)
     m_events->removeHandler(EventTypes::KeyStateKeyDown, getEventTarget());
 #endif
-    m_returnTypingOffered = false;
+    m_returnTypingOffered = 0;
     m_active = false;
     delete m_server;
     m_server = nullptr;

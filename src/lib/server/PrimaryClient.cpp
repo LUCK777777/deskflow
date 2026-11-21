@@ -49,13 +49,13 @@ void PrimaryClient::fakeInputEnd()
   }
 }
 
-void PrimaryClient::returnTypingTap(KeyID key)
+void PrimaryClient::returnTypingTap(KeyID key, KeyModifierMask mask)
 {
   // One tap at a time, so no remote key can remain held across a display switch.
   constexpr KeyButton tapButton = 1;
   fakeInputBegin();
-  m_computer->keyDown(key, 0, tapButton, {});
-  m_computer->keyUp(key, 0, tapButton);
+  m_computer->keyDown(key, mask, tapButton, {});
+  m_computer->keyUp(key, mask, tapButton);
   fakeInputEnd();
 }
 

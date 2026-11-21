@@ -237,7 +237,7 @@ private:
   std::string m_dataClipboard[kClipboardEnd];
   IEventQueue *m_events = nullptr;
   bool m_useSecureNetwork = false;
-  bool m_returnTypingOffered = false;
+  uint32_t m_returnTypingOffered = 0;
   bool m_enableClipboard = true;
   bool m_relativeMouseMoves = false;
   bool m_hasRelativeRestorePosition = false;

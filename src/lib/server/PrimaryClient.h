@@ -64,7 +64,7 @@ public:
   Undoes whatever \c fakeInputBegin() did.
   */
   void fakeInputEnd();
-  void returnTypingTap(KeyID key);
+  void returnTypingTap(KeyID key, KeyModifierMask mask = 0);
 
   //@}
   //! @name accessors

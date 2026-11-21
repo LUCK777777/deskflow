@@ -224,7 +224,7 @@ private:
 
   // true if mouse has entered the screen
   bool m_isOnComputer;
-  std::atomic<bool> m_returnTypingEnabled{false};
+  std::atomic<uint32_t> m_returnTypingOptions{0};
   // Only the event tap thread touches this bitset while it is running.
   std::bitset<128> m_returnTypingDown;
 

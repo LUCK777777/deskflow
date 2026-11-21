@@ -91,7 +91,7 @@ static const KeyID kKeyClear = 0xEF0B;
 static const KeyID kKeyReturn = 0xEF0D; /* Return, enter */
 
 #ifdef __cplusplus
-// Return typing currently supports text taps. Shortcut chords stay on the client.
+// Text taps supported by return typing.
 constexpr bool isReturnTypingKey(KeyID key)
 {
   return (key >= ' ' && key <= '~') || key == kKeyBackSpace || key == kKeyReturn;

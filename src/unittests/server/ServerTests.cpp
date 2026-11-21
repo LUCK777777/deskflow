@@ -8,6 +8,7 @@
 #include "ServerTests.h"
 
 #include "deskflow/KeyTypes.h"
+#include "deskflow/ProtocolTypes.h"
 #include "server/Server.h"
 
 void ServerTests::SwitchToComputerInfo_alloc_computer()
@@ -36,6 +37,16 @@ void ServerTests::returnTypingAcceptsOnlyTextKeys()
   QVERIFY(!isReturnTypingKey(kKeyDelete));
   QVERIFY(!isReturnTypingKey(kKeyControl_L));
   QVERIFY(!isReturnTypingKey(0x4E2D));
+}
+
+void ServerTests::returnTypingClipboardHistoryRequiresAnOffer()
+{
+  constexpr auto clipboardHistory = kReturnTypingClipboardHistoryCode;
+  QVERIFY(!returnTypingCodeOffered(clipboardHistory, 0));
+  QVERIFY(!returnTypingCodeOffered(clipboardHistory, kReturnTypingText));
+  QVERIFY(returnTypingCodeOffered(clipboardHistory, kReturnTypingText | kReturnTypingClipboardHistory));
+  QVERIFY(returnTypingCodeOffered('v', kReturnTypingText));
+  QVERIFY(!returnTypingCodeOffered(kKeySuper_L, kReturnTypingText | kReturnTypingClipboardHistory));
 }
 
 QTEST_MAIN(ServerTests)
