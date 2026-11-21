@@ -784,6 +784,7 @@ void OSXComputer::disable()
   }
   m_returnTypingOptions = 0;
   m_returnTypingDown.reset();
+  m_returnTypingClipboardKeyDown = false;
 
   if (m_eventTapRLSR) {
     CFRelease(m_eventTapRLSR);
@@ -1714,12 +1715,18 @@ OSXComputer::handleCGInputEventSecondary(CGEventTapProxy, CGEventType type, CGEv
   const bool wasForwarded = computer->m_returnTypingDown.test(physicalKey);
   if (type == kCGEventKeyUp) {
     computer->m_returnTypingDown.reset(physicalKey);
+    if (physicalKey == kVK_ANSI_V) {
+      computer->m_returnTypingClipboardKeyDown = false;
+    }
     return wasForwarded ? nullptr : event;
   }
 
   const bool repeat = CGEventGetIntegerValueField(event, kCGKeyboardEventAutorepeat) != 0;
   if (repeat && !wasForwarded) {
     return event;
+  }
+  if (repeat && physicalKey == kVK_ANSI_V && computer->m_returnTypingClipboardKeyDown) {
+    return nullptr;
   }
 
   constexpr auto shortcutModifiers = kCGEventFlagMaskCommand | kCGEventFlagMaskControl | kCGEventFlagMaskAlternate;
@@ -1734,6 +1741,7 @@ OSXComputer::handleCGInputEventSecondary(CGEventTapProxy, CGEventType type, CGEv
       return nullptr;
     }
     key = kReturnTypingClipboardHistoryCode;
+    computer->m_returnTypingClipboardKeyDown = true;
   } else if ((options & kReturnTypingText) == 0 || (modifiers & shortcutModifiers) != 0) {
     return wasForwarded ? nullptr : event;
   } else if (physicalKey == kVK_Return || physicalKey == kVK_ANSI_KeypadEnter) {
