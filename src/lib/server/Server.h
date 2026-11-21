@@ -160,6 +160,7 @@ public:
   destroyed when the client disconnects or is disconnected.
   */
   void adoptClient(BaseClientProxy *client);
+  void returnTyping(BaseClientProxy *client, KeyID key);
 
   //! Disconnect clients
   /*!
@@ -299,6 +300,8 @@ private:
 
   // send computer options to \c client
   void sendOptions(BaseClientProxy *client) const;
+  bool returnTypingAllowed(BaseClientProxy *client) const;
+  void updateReturnTyping() const;
 
   // process options from configuration
   void processOptions();
@@ -378,6 +381,7 @@ private:
 
   // the client with focus
   BaseClientProxy *m_active = nullptr;
+  std::string m_returnTypingClient;
 
   // current configuration
   ServerConfig *m_config = nullptr;

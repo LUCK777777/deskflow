@@ -19,6 +19,7 @@
 #include "deskflow/Clipboard.h"
 #include "deskflow/Computer.h"
 #include "deskflow/DeskflowException.h"
+#include "deskflow/IKeyState.h"
 #include "deskflow/IPlatformComputer.h"
 #include "deskflow/PacketStreamFilter.h"
 #include "deskflow/ProtocolTypes.h"
@@ -317,6 +318,7 @@ void Client::resetOptions()
 {
   m_relativeMouseMoves = false;
   m_hasRelativeRestorePosition = false;
+  m_returnTypingOffered = false;
   m_computer->resetOptions();
 }
 
@@ -342,6 +344,8 @@ void Client::setOptions(const OptionsList &options)
       if (index != options.end()) {
         m_maximumClipboardSize = *index;
       }
+    } else if (id == kOptionReturnTyping) {
+      m_returnTypingOffered = *++index != 0;
     } else if (id == kOptionRelativeMouseMoves) {
       index++;
       if (index != options.end()) {
@@ -494,6 +498,14 @@ bool Client::setupComputer(int16_t protocolMinor)
     m_events->addHandler(EventTypes::ClipboardGrabbed, getEventTarget(), [this](const auto &e) {
       handleClipboardGrabbed(e);
     });
+#if defined(__APPLE__)
+    m_events->addHandler(EventTypes::KeyStateKeyDown, getEventTarget(), [this](const auto &event) {
+      const auto *key = static_cast<const IKeyState::KeyInfo *>(event.getData());
+      if (m_ready && !m_active && m_useSecureNetwork && m_returnTypingOffered && isReturnTypingKey(key->m_key)) {
+        ProtocolUtil::writef(m_stream, kMsgDReturnTyping, key->m_key);
+      }
+    });
+#endif
   }
   return m_server != nullptr;
 }
@@ -546,6 +558,11 @@ void Client::cleanupComputer()
     }
     m_events->removeHandler(EventTypes::ComputerShapeChanged, getEventTarget());
     m_events->removeHandler(EventTypes::ClipboardGrabbed, getEventTarget());
+#if defined(__APPLE__)
+    m_events->removeHandler(EventTypes::KeyStateKeyDown, getEventTarget());
+#endif
+    m_returnTypingOffered = false;
+    m_active = false;
     delete m_server;
     m_server = nullptr;
   }

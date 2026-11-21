@@ -10,6 +10,7 @@
 
 #include "base/IEventQueue.h"
 #include "base/Log.h"
+#include "common/Settings.h"
 #include "deskflow/AppUtil.h"
 #include "deskflow/Computer.h"
 #include "deskflow/DeskflowException.h"
@@ -19,6 +20,7 @@
 #include "deskflow/ProtocolTypes.h"
 #include "deskflow/StreamChunker.h"
 #include "deskflow/ipc/CoreIpc.h"
+#include "net/SecureSocket.h"
 #include "net/TCPSocket.h"
 #include "server/ClientListener.h"
 #include "server/ClientProxy.h"
@@ -52,6 +54,10 @@ Server::Server(ServerConfig &config, PrimaryClient *primaryClient, deskflow::Com
   assert(m_primaryClient != nullptr);
   assert(config.isComputer(primaryClient->getName()));
   assert(m_computer != nullptr);
+
+#if defined(_WIN32)
+  m_returnTypingClient = Settings::value(Settings::Server::ReturnTypingClient).toString().toStdString();
+#endif
 
   std::string primaryName = getName(primaryClient);
 
@@ -491,6 +497,7 @@ void Server::switchComputer(BaseClientProxy *dst, int32_t x, int32_t y, bool for
 
     // enter new computer
     m_active->enter(x, y, m_seqNum, m_primaryClient->getToggleMask(), forScreensaver);
+    updateReturnTyping();
 
     if (m_enableClipboard) {
       // send the clipboard data to new active computer
@@ -1073,9 +1080,50 @@ void Server::sendOptions(BaseClientProxy *client) const
     }
   }
 
+  if (!m_returnTypingClient.empty() && getName(client) == m_returnTypingClient) {
+    optionsList.push_back(kOptionReturnTyping);
+    optionsList.push_back(returnTypingAllowed(client));
+  }
+
   // send the options
   client->resetOptions();
   client->setOptions(optionsList);
+}
+
+bool Server::returnTypingAllowed(BaseClientProxy *client) const
+{
+  if (m_returnTypingClient.empty() || m_active != m_primaryClient || m_activeSaver != nullptr) {
+    return false;
+  }
+
+  const auto allowed = m_clients.find(m_returnTypingClient);
+  if (allowed == m_clients.end() || allowed->second != client || client == m_primaryClient) {
+    return false;
+  }
+
+  const auto *stream = dynamic_cast<const StreamFilter *>(client->getStream());
+  const auto *socket = stream ? dynamic_cast<const SecureSocket *>(stream->getStream()) : nullptr;
+  return socket && socket->isPeerAuthenticated();
+}
+
+void Server::returnTyping(BaseClientProxy *client, KeyID key)
+{
+  if (isReturnTypingKey(key) && returnTypingAllowed(client)) {
+    m_primaryClient->returnTypingTap(key);
+  }
+}
+
+void Server::updateReturnTyping() const
+{
+  if (m_returnTypingClient.empty()) {
+    return;
+  }
+
+  const auto found = m_clients.find(m_returnTypingClient);
+  if (found != m_clients.end() && found->second != m_primaryClient) {
+    auto *client = found->second;
+    client->setOptions({kOptionReturnTyping, returnTypingAllowed(client)});
+  }
 }
 
 void Server::processOptions()
@@ -1524,6 +1572,8 @@ void Server::onScreensaver(bool activated)
     // reset state
     m_activeSaver = nullptr;
   }
+
+  updateReturnTyping();
 
   // send message to all clients
   for (ClientList::const_iterator index = m_clients.begin(); index != m_clients.end(); ++index) {
@@ -2058,6 +2108,8 @@ void Server::forceLeaveClient(const BaseClientProxy *client)
   if (m_activeSaver == client) {
     m_activeSaver = nullptr;
   }
+
+  updateReturnTyping();
 
   // tell primary client about the active sides
   m_primaryClient->reconfigure(getActivePrimarySides());

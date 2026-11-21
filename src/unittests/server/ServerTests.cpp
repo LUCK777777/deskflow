@@ -7,6 +7,7 @@
 
 #include "ServerTests.h"
 
+#include "deskflow/KeyTypes.h"
 #include "server/Server.h"
 
 void ServerTests::SwitchToComputerInfo_alloc_computer()
@@ -22,6 +23,19 @@ void ServerTests::KeyboardBroadcastInfo_alloc_stateAndComputers()
   QCOMPARE(info->m_state, Server::KeyboardBroadcastInfo::State::kOn);
   QCOMPARE(info->m_computers, "test");
   delete info;
+}
+
+void ServerTests::returnTypingAcceptsOnlyTextKeys()
+{
+  QVERIFY(isReturnTypingKey(' '));
+  QVERIFY(isReturnTypingKey('A'));
+  QVERIFY(isReturnTypingKey('~'));
+  QVERIFY(isReturnTypingKey(kKeyBackSpace));
+  QVERIFY(isReturnTypingKey(kKeyReturn));
+  QVERIFY(!isReturnTypingKey(kKeyNone));
+  QVERIFY(!isReturnTypingKey(kKeyDelete));
+  QVERIFY(!isReturnTypingKey(kKeyControl_L));
+  QVERIFY(!isReturnTypingKey(0x4E2D));
 }
 
 QTEST_MAIN(ServerTests)

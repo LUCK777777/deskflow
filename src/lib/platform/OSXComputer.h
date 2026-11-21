@@ -19,6 +19,7 @@
 #include <mach/mach_interface.h>
 #include <mach/mach_port.h>
 
+#include <atomic>
 #include <bitset>
 #include <map>
 #include <memory>
@@ -223,6 +224,9 @@ private:
 
   // true if mouse has entered the screen
   bool m_isOnComputer;
+  std::atomic<bool> m_returnTypingEnabled{false};
+  // Only the event tap thread touches this bitset while it is running.
+  std::bitset<128> m_returnTypingDown;
 
   // the display
   CGDirectDisplayID m_displayID;

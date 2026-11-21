@@ -59,6 +59,10 @@ public:
     m_fatal = b;
   }
   bool isSecureReady() const;
+  bool isPeerAuthenticated() const
+  {
+    return m_securityLevel == SecurityLevel::PeerAuth && isSecureReady();
+  }
   void secureConnect();
   void secureAccept();
   int secureRead(void *buffer, int size, int &read);

@@ -760,6 +760,8 @@ void OSXComputer::disable()
   if (m_eventTapThread.joinable()) {
     m_eventTapThread.join();
   }
+  m_returnTypingEnabled = false;
+  m_returnTypingDown.reset();
 
   if (m_eventTapRLSR) {
     CFRelease(m_eventTapRLSR);
@@ -791,6 +793,7 @@ void OSXComputer::disable()
 
 void OSXComputer::enter()
 {
+  m_returnTypingEnabled = false;
   m_isOnComputer = true;
   showCursor();
 
@@ -880,12 +883,18 @@ void OSXComputer::screensaver(bool activate)
 
 void OSXComputer::resetOptions()
 {
-  // no options
+  m_returnTypingEnabled = false;
 }
 
-void OSXComputer::setOptions(const OptionsList &)
+void OSXComputer::setOptions(const OptionsList &options)
 {
-  // no options
+  for (size_t i = 0; i + 1 < options.size(); i += 2) {
+    if (options[i] == kOptionReturnTyping) {
+      m_returnTypingEnabled = !m_isPrimary && !m_isOnComputer && options[i + 1] != 0 &&
+                              Settings::value(Settings::Client::ReturnTyping).toBool() &&
+                              Settings::value(Settings::Security::TlsEnabled).toBool();
+    }
+  }
 }
 
 void OSXComputer::setSequenceNumber(uint32_t seqNum)
@@ -1652,27 +1661,60 @@ bool OSXComputer::HotKeyItem::operator<(const HotKeyItem &x) const
   return (m_keycode < x.m_keycode || (m_keycode == x.m_keycode && m_mask < x.m_mask));
 }
 
-// Quartz event tap support for the secondary display. This makes sure that we
-// will show the cursor if a local event comes in while deskflow has the cursor
-// off the computer.
+// Capture text taps on a Mac client only while the server invites them.
 CGEventRef
-OSXComputer::handleCGInputEventSecondary(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon)
+OSXComputer::handleCGInputEventSecondary(CGEventTapProxy, CGEventType type, CGEventRef event, void *refcon)
 {
-  // this fix is really screwing with the correct show/hide behavior. it
-  // should be tested better before reintroducing.
-  return event;
+  // Restrict return typing to events without an originating process.
+  if ((type != kCGEventKeyDown && type != kCGEventKeyUp) ||
+      CGEventGetIntegerValueField(event, kCGEventSourceUnixProcessID) != 0) {
+    return event;
+  }
 
-  OSXComputer *computer = (OSXComputer *)refcon;
-  if (computer->m_cursorHidden && type == kCGEventMouseMoved) {
+  auto *computer = static_cast<OSXComputer *>(refcon);
+  const auto physicalKey = static_cast<size_t>(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode));
+  if (physicalKey >= computer->m_returnTypingDown.size()) {
+    return event;
+  }
 
-    CGPoint pos = CGEventGetLocation(event);
-    if (pos.x != computer->m_xCenter || pos.y != computer->m_yCenter) {
+  const bool wasForwarded = computer->m_returnTypingDown.test(physicalKey);
+  if (type == kCGEventKeyUp) {
+    computer->m_returnTypingDown.reset(physicalKey);
+    return wasForwarded ? nullptr : event;
+  }
 
-      LOG_DEBUG("show cursor on secondary, type=%d pos=%d,%d", type, pos.x, pos.y);
-      computer->showCursor();
+  if (!wasForwarded && CGEventGetIntegerValueField(event, kCGKeyboardEventAutorepeat) != 0) {
+    return event;
+  }
+
+  constexpr auto shortcutModifiers = kCGEventFlagMaskCommand | kCGEventFlagMaskControl | kCGEventFlagMaskAlternate;
+  if (!computer->m_returnTypingEnabled || (CGEventGetFlags(event) & shortcutModifiers) != 0) {
+    return wasForwarded ? nullptr : event;
+  }
+
+  KeyID key = kKeyNone;
+  if (physicalKey == kVK_Return || physicalKey == kVK_ANSI_KeypadEnter) {
+    key = kKeyReturn;
+  } else if (physicalKey == kVK_Delete) {
+    key = kKeyBackSpace;
+  } else {
+    UniChar characters[2]{};
+    UniCharCount length = 0;
+    CGEventKeyboardGetUnicodeString(event, 2, &length, characters);
+    if (length == 1) {
+      key = characters[0];
     }
   }
-  return event;
+
+  if (!isReturnTypingKey(key)) {
+    return wasForwarded ? nullptr : event;
+  }
+
+  computer->m_returnTypingDown.set(physicalKey);
+  computer->m_events->addEvent(
+      Event(EventTypes::KeyStateKeyDown, computer->getEventTarget(), IKeyState::KeyInfo::alloc(key, 0, 0, 1))
+  );
+  return nullptr;
 }
 
 // Quartz event tap support

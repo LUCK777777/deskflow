@@ -545,6 +545,9 @@ extern const char *const kMsgCKeepAlive;
  */
 extern const char *const kMsgDKeyDown;
 
+//! Client-to-server text key tap, offered via kOptionReturnTyping.
+extern const char *const kMsgDReturnTyping;
+
 /**
  * @brief Key press event (v1.1 to v1.7)
  *

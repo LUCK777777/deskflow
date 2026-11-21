@@ -42,6 +42,7 @@ public:
     inline static const auto YScrollScale = QStringLiteral("client/yScrollScale");
     inline static const auto XScrollScale = QStringLiteral("client/xScrollScale");
     inline static const auto LanguageSync = QStringLiteral("client/languageSync");
+    inline static const auto ReturnTyping = QStringLiteral("client/returnTyping");
     inline static const auto RemoteHost = QStringLiteral("client/remoteHost");
     inline static const auto XdpClipboardRetried = QStringLiteral("client/xdpClipboardRetried");
     inline static const auto XdpRestoreToken = QStringLiteral("client/xdpRestoreToken");
@@ -106,6 +107,7 @@ public:
     inline static const auto DefaultLockToComputerState = QStringLiteral("server/defaultLockToComputerState");
     inline static const auto DisableLockToComputer = QStringLiteral("server/disableLockToComputer");
     inline static const auto EnableClipboard = QStringLiteral("server/enableClipboard");
+    inline static const auto ReturnTypingClient = QStringLiteral("server/returnTypingClient");
     inline static const auto EnableHeartbeat = QStringLiteral("server/enableHeartbeat");
     inline static const auto EnableSwitchDelay = QStringLiteral("server/enableSwitchDelay");
     inline static const auto EnableSwitchDoubleTap = QStringLiteral("server/enableSwitchDoubleTap");
@@ -278,6 +280,7 @@ private:
     , Client::InvertXScroll
     , Client::LanguageSync
     , Client::RemoteHost
+    , Client::ReturnTyping
     , Client::YScrollScale
     , Client::XScrollScale
     , Core::CoreMode
@@ -322,6 +325,7 @@ private:
     , Server::DefaultLockToComputerState
     , Server::DisableLockToComputer
     , Server::EnableClipboard
+    , Server::ReturnTypingClient
     , Server::EnableHeartbeat
     , Server::EnableSwitchDelay
     , Server::EnableSwitchDoubleTap
@@ -353,6 +357,7 @@ private:
     , Client::InvertXScroll
     , Client::LanguageSync
     , Client::XdpClipboardRetried
+    , Client::ReturnTyping
     , Log::ToFile
     , Log::GuiDebug
     , Server::DefaultLockToComputerState

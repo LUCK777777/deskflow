@@ -89,6 +89,14 @@ static const KeyID kKeyTab = 0xEF09;
 static const KeyID kKeyLinefeed = 0xEF0A; /* Linefeed, LF */
 static const KeyID kKeyClear = 0xEF0B;
 static const KeyID kKeyReturn = 0xEF0D; /* Return, enter */
+
+#ifdef __cplusplus
+// Return typing currently supports text taps. Shortcut chords stay on the client.
+constexpr bool isReturnTypingKey(KeyID key)
+{
+  return (key >= ' ' && key <= '~') || key == kKeyBackSpace || key == kKeyReturn;
+}
+#endif
 static const KeyID kKeyPause = 0xEF13;  /* Pause, hold */
 static const KeyID kKeyScrollLock = 0xEF14;
 static const KeyID kKeySysReq = 0xEF15;

@@ -27,6 +27,7 @@ const char *const kMsgCKeepAlive = "CALV";
 // This is weird, it goes from DKDN to DKDL. Someone misunderstood the pattern (keep the
 // code, pick the form by negotiated version). Do not copy this.
 const char *const kMsgDKeyDown = "DKDL%2i%2i%2i%s";
+const char *const kMsgDReturnTyping = "DRTY%2i";
 const char *const kMsgDKeyDown1_1 = "DKDN%2i%2i%2i";
 const char *const kMsgDKeyDown1_0 = "DKDN%2i%2i";
 

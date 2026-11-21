@@ -49,6 +49,16 @@ void PrimaryClient::fakeInputEnd()
   }
 }
 
+void PrimaryClient::returnTypingTap(KeyID key)
+{
+  // One tap at a time, so no remote key can remain held across a display switch.
+  constexpr KeyButton tapButton = 1;
+  fakeInputBegin();
+  m_computer->keyDown(key, 0, tapButton, {});
+  m_computer->keyUp(key, 0, tapButton);
+  fakeInputEnd();
+}
+
 int32_t PrimaryClient::getJumpZoneSize() const
 {
   return m_computer->getJumpZoneSize();

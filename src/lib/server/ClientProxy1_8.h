@@ -17,6 +17,9 @@ public:
   void keyDown(KeyID, KeyModifierMask, KeyButton, const std::string &) override;
   void keyRepeat(KeyID, KeyModifierMask, int32_t count, KeyButton, const std::string &) override;
 
+protected:
+  bool parseMessage(const uint8_t *code) override;
+
 private:
   void synchronizeLanguages() const;
 };

@@ -8,7 +8,11 @@
 #include "deskflow/KeyboardLayoutManager.h"
 #include "deskflow/ProtocolUtil.h"
 
+#include "server/Server.h"
+
 #include "ClientProxy1_8.h"
+
+#include <cstring>
 
 ClientProxy1_8::ClientProxy1_8(
     const std::string &name, deskflow::IStream *adoptedStream, Server *server, IEventQueue *events
@@ -16,6 +20,20 @@ ClientProxy1_8::ClientProxy1_8(
     : ClientProxy1_7(name, adoptedStream, server, events)
 {
   synchronizeLanguages();
+}
+
+bool ClientProxy1_8::parseMessage(const uint8_t *code)
+{
+  if (std::memcmp(code, kMsgDReturnTyping, 4) != 0) {
+    return ClientProxy1_7::parseMessage(code);
+  }
+
+  KeyID key = 0;
+  if (!ProtocolUtil::readf(getStream(), kMsgDReturnTyping + 4, &key)) {
+    return false;
+  }
+  getServer()->returnTyping(this, key);
+  return true;
 }
 
 void ClientProxy1_8::synchronizeLanguages() const

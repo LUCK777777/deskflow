@@ -132,6 +132,15 @@ This section contains options used by the application security it will begin wit
 | keySize               | `2048` OR `4096`  | Size of the TLS key to use [default: 2048]| 
 | tlsEnabled            | `true` or `false` | Are we using TLS encryption when communicating [default: true].|
 
+### Experimental Mac-to-Windows return typing
+
+With a Windows server and a Mac client, this lets the Mac keyboard type on Windows while the shared pointer is on Windows. It is disabled by default and requires patched cores on both computers with TLS and server-side client certificate checking enabled.
+
+- On the Windows server, set `returnTypingClient` in `[server]` to the Mac's configured computer name.
+- On the Mac client, set `returnTyping=true` in `[client]`.
+
+Restart both cores after changing these settings. The prototype forwards ASCII characters, Backspace and Enter as key taps. Shortcut chords, IME input and dictation remain local. The Mac resumes local typing when the pointer returns to the Mac or the connection ends.
+
 ### Server
 
 This section contains options used when in server mode it will begin with `[server]`
