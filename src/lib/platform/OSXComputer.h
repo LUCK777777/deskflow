@@ -254,7 +254,8 @@ private:
   using MouseButtonEventMapType = std::map<uint16_t, CGEventType>;
   std::vector<MouseButtonEventMapType> MouseButtonEventMap;
 
-  bool m_cursorHidden;
+  enum class SecondaryCursor { Visible, Hidden, WakeRequested };
+  std::atomic<SecondaryCursor> m_secondaryCursor{SecondaryCursor::Visible};
 
   // keyboard stuff
   OSXKeyState *m_keyState;
