@@ -8,7 +8,7 @@
 #include "ServerTests.h"
 
 #include "deskflow/KeyTypes.h"
-#include "deskflow/ProtocolTypes.h"
+#include "deskflow/ReturnTyping.h"
 #include "server/Server.h"
 
 void ServerTests::SwitchToComputerInfo_alloc_computer()
@@ -47,6 +47,30 @@ void ServerTests::returnTypingClipboardHistoryRequiresAnOffer()
   QVERIFY(returnTypingCodeOffered(clipboardHistory, kReturnTypingText | kReturnTypingClipboardHistory));
   QVERIFY(returnTypingCodeOffered('v', kReturnTypingText));
   QVERIFY(!returnTypingCodeOffered(kKeySuper_L, kReturnTypingText | kReturnTypingClipboardHistory));
+}
+
+void ServerTests::returnTypingShortcutsMatchExactChords()
+{
+  constexpr auto previous = kReturnTypingText | kReturnTypingClipboardHistory;
+  constexpr auto current = previous | kReturnTypingShortcuts;
+  QCOMPARE(returnTypingShortcutCode('v', KeyModifierSuper, previous), kReturnTypingClipboardHistoryCode);
+  QCOMPARE(returnTypingShortcutCode('c', KeyModifierSuper, previous), kKeyNone);
+  QCOMPARE(returnTypingShortcutCode(kKeyTab, KeyModifierSuper, current), kKeyNone);
+  QCOMPARE(returnTypingShortcutCode(kKeyTab, KeyModifierAlt | KeyModifierControl, current), kKeyNone);
+  QCOMPARE(returnTypingShortcutCode('q', KeyModifierSuper, current), kKeyNone);
+  QCOMPARE(returnTypingShortcutCode('c', 0, current), kKeyNone);
+
+  for (const auto &expected : kReturnTypingShortcutMap) {
+    const auto code = returnTypingShortcutCode(expected.macKey, expected.macModifiers, current);
+    QVERIFY(code != kKeyNone);
+    QVERIFY(!isReturnTypingKey(code));
+    QCOMPARE(returnTypingShortcut(code, current), &expected);
+    QVERIFY(!returnTypingCodeOffered(code, 0));
+  }
+  const auto pasteCode = returnTypingShortcutCode('v', KeyModifierControl, current);
+  QCOMPARE(returnTypingShortcut(pasteCode, current)->windowsModifiers, KeyModifierControl);
+  QVERIFY(!returnTypingCodeOffered(kReturnTypingShortcutCodeBase + kReturnTypingShortcutMap.size(), current));
+  QVERIFY(!returnTypingCodeOffered(kKeyDelete, current));
 }
 
 QTEST_MAIN(ServerTests)

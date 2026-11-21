@@ -139,7 +139,7 @@ With a Windows server and a Mac client, this lets the Mac keyboard type on Windo
 - On the Windows server, set `returnTypingClient` in `[server]` to the Mac's configured computer name.
 - On the Mac client, set `returnTyping=true` in `[client]`.
 
-Restart both cores after changing these settings. The prototype forwards ASCII characters, Backspace and Enter as key taps. While the pointer is on Windows, Command+V opens the Windows clipboard history if the Windows core offers that shortcut. On Mac, Command+V uses local paste. Other shortcut chords, IME input and dictation remain local. The Mac resumes local typing when the pointer returns to the Mac or the connection ends.
+Restart both cores after changing these settings. While the shared pointer is on Windows, the prototype forwards ASCII characters, Backspace, Enter, and the [Mac-to-Windows shortcut preset](Mac-to-Windows-Shortcuts.zh-CN.md) supported by the Windows core. Command+V opens Windows clipboard history and Control+V pastes from the Windows clipboard. The Mac resumes local typing when the pointer returns to the Mac or the connection ends.
 
 ### Server
 

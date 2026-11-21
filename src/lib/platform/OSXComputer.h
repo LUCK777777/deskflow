@@ -227,7 +227,7 @@ private:
   std::atomic<uint32_t> m_returnTypingOptions{0};
   // Only the event tap thread touches the pressed keys while it is running.
   std::bitset<128> m_returnTypingDown;
-  bool m_returnTypingClipboardKeyDown = false;
+  std::bitset<128> m_returnTypingNoRepeat;
 
   // the display
   CGDirectDisplayID m_displayID;
