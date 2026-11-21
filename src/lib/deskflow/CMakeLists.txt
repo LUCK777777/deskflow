@@ -73,6 +73,7 @@ add_library(${lib_name} STATIC ${PLATFORM_CODE}
   ProtocolTypes.h
   ProtocolUtil.cpp
   ProtocolUtil.h
+  ReturnTyping.h
   ServerApp.cpp
   ServerApp.h
   StreamChunker.cpp

@@ -22,7 +22,7 @@
 #include "deskflow/Clipboard.h"
 #include "deskflow/DisplayInvalidException.h"
 #include "deskflow/KeyMap.h"
-#include "deskflow/ProtocolTypes.h"
+#include "deskflow/ReturnTyping.h"
 #include "mt/CondVar.h"
 #include "mt/Lock.h"
 #include "mt/Mutex.h"
@@ -36,6 +36,7 @@
 
 #include <AppKit/NSEvent.h>
 #include <AvailabilityMacros.h>
+#include <algorithm>
 #include <IOKit/hidsystem/event_status_driver.h>
 #include <dispatch/dispatch.h>
 #include <libproc.h>
@@ -784,6 +785,7 @@ void OSXComputer::disable()
   }
   m_returnTypingOptions = 0;
   m_returnTypingDown.reset();
+  m_returnTypingNoRepeat.reset();
 
   if (m_eventTapRLSR) {
     CFRelease(m_eventTapRLSR);
@@ -1684,6 +1686,50 @@ bool OSXComputer::HotKeyItem::operator<(const HotKeyItem &x) const
   return (m_keycode < x.m_keycode || (m_keycode == x.m_keycode && m_mask < x.m_mask));
 }
 
+static KeyID returnTypingMacKey(std::size_t physicalKey)
+{
+  static constexpr auto letters = std::to_array<std::size_t>({
+      kVK_ANSI_A, kVK_ANSI_B, kVK_ANSI_C, kVK_ANSI_D, kVK_ANSI_E, kVK_ANSI_F, kVK_ANSI_G, kVK_ANSI_H,
+      kVK_ANSI_I, kVK_ANSI_J, kVK_ANSI_K, kVK_ANSI_L, kVK_ANSI_M, kVK_ANSI_N, kVK_ANSI_O, kVK_ANSI_P,
+      kVK_ANSI_Q, kVK_ANSI_R, kVK_ANSI_S, kVK_ANSI_T, kVK_ANSI_U, kVK_ANSI_V, kVK_ANSI_W, kVK_ANSI_X,
+      kVK_ANSI_Y, kVK_ANSI_Z,
+  });
+  const auto letter = std::ranges::find(letters, physicalKey);
+  if (letter != letters.end()) {
+    return 'a' + static_cast<KeyID>(letter - letters.begin());
+  }
+  switch (physicalKey) {
+  case kVK_ANSI_Equal:
+    return '=';
+  case kVK_ANSI_Minus:
+    return '-';
+  case kVK_ANSI_0:
+    return '0';
+  case kVK_Tab:
+    return kKeyTab;
+  case kVK_Escape:
+    return kKeyEscape;
+  case kVK_LeftArrow:
+    return kKeyLeft;
+  case kVK_RightArrow:
+    return kKeyRight;
+  case kVK_UpArrow:
+    return kKeyUp;
+  case kVK_DownArrow:
+    return kKeyDown;
+  case kVK_Home:
+    return kKeyHome;
+  case kVK_End:
+    return kKeyEnd;
+  case kVK_PageUp:
+    return kKeyPageUp;
+  case kVK_PageDown:
+    return kKeyPageDown;
+  default:
+    return kKeyNone;
+  }
+}
+
 CGEventRef
 OSXComputer::handleCGInputEventSecondary(CGEventTapProxy, CGEventType type, CGEventRef event, void *refcon)
 {
@@ -1714,6 +1760,7 @@ OSXComputer::handleCGInputEventSecondary(CGEventTapProxy, CGEventType type, CGEv
   const bool wasForwarded = computer->m_returnTypingDown.test(physicalKey);
   if (type == kCGEventKeyUp) {
     computer->m_returnTypingDown.reset(physicalKey);
+    computer->m_returnTypingNoRepeat.reset(physicalKey);
     return wasForwarded ? nullptr : event;
   }
 
@@ -1721,20 +1768,27 @@ OSXComputer::handleCGInputEventSecondary(CGEventTapProxy, CGEventType type, CGEv
   if (repeat && !wasForwarded) {
     return event;
   }
+  if (repeat && computer->m_returnTypingNoRepeat.test(physicalKey)) {
+    return nullptr;
+  }
 
-  constexpr auto shortcutModifiers = kCGEventFlagMaskCommand | kCGEventFlagMaskControl | kCGEventFlagMaskAlternate;
-  constexpr auto chordModifiers = shortcutModifiers | kCGEventFlagMaskShift | kCGEventFlagMaskSecondaryFn;
+  constexpr auto commandFlags = kCGEventFlagMaskCommand | kCGEventFlagMaskControl | kCGEventFlagMaskAlternate;
+  constexpr auto chordFlags = commandFlags | kCGEventFlagMaskShift;
   const auto modifiers = CGEventGetFlags(event);
   const auto options = computer->m_returnTypingOptions.load();
+  if (options == 0) {
+    return wasForwarded ? nullptr : event;
+  }
 
-  KeyID key = kKeyNone;
-  if ((options & kReturnTypingClipboardHistory) != 0 && physicalKey == kVK_ANSI_V &&
-      (modifiers & chordModifiers) == kCGEventFlagMaskCommand) {
-    if (repeat) {
+  KeyID key = returnTypingShortcutCode(
+      returnTypingMacKey(physicalKey), computer->m_keyState->mapModifiersFromOSX(modifiers & chordFlags), options
+  );
+  if (const auto *shortcut = returnTypingShortcut(key, options)) {
+    if (repeat && !shortcut->acceptsRepeat()) {
       return nullptr;
     }
-    key = kReturnTypingClipboardHistoryCode;
-  } else if ((options & kReturnTypingText) == 0 || (modifiers & shortcutModifiers) != 0) {
+    computer->m_returnTypingNoRepeat.set(physicalKey, !shortcut->acceptsRepeat());
+  } else if ((options & kReturnTypingText) == 0 || (modifiers & commandFlags) != 0) {
     return wasForwarded ? nullptr : event;
   } else if (physicalKey == kVK_Return || physicalKey == kVK_ANSI_KeypadEnter) {
     key = kKeyReturn;

@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include "deskflow/KeyTypes.h"
-
 #include <cstdint>
 /**
  * @file ProtocolTypes.h
@@ -549,18 +547,6 @@ extern const char *const kMsgDKeyDown;
 
 //! Client-to-server key tap or predefined action, offered via kOptionReturnTyping.
 extern const char *const kMsgDReturnTyping;
-
-inline constexpr uint32_t kReturnTypingText = 1u << 0;
-inline constexpr uint32_t kReturnTypingClipboardHistory = 1u << 1;
-inline constexpr KeyID kReturnTypingClipboardHistoryCode = 1;
-
-constexpr bool returnTypingCodeOffered(KeyID code, uint32_t options)
-{
-  if (code == kReturnTypingClipboardHistoryCode) {
-    return (options & kReturnTypingClipboardHistory) != 0;
-  }
-  return (options & kReturnTypingText) != 0 && isReturnTypingKey(code);
-}
 
 /**
  * @brief Key press event (v1.1 to v1.7)

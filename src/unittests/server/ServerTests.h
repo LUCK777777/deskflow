@@ -14,4 +14,5 @@ private Q_SLOTS:
   void KeyboardBroadcastInfo_alloc_stateAndComputers();
   void returnTypingAcceptsOnlyTextKeys();
   void returnTypingClipboardHistoryRequiresAnOffer();
+  void returnTypingShortcutsMatchExactChords();
 };

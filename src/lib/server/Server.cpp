@@ -18,6 +18,7 @@
 #include "deskflow/OptionTypes.h"
 #include "deskflow/PacketStreamFilter.h"
 #include "deskflow/ProtocolTypes.h"
+#include "deskflow/ReturnTyping.h"
 #include "deskflow/StreamChunker.h"
 #include "deskflow/ipc/CoreIpc.h"
 #include "net/SecureSocket.h"
@@ -1103,17 +1104,17 @@ uint32_t Server::returnTypingOptions(BaseClientProxy *client) const
 
   const auto *stream = dynamic_cast<const StreamFilter *>(client->getStream());
   const auto *socket = stream ? dynamic_cast<const SecureSocket *>(stream->getStream()) : nullptr;
-  return socket && socket->isPeerAuthenticated() ? kReturnTypingText | kReturnTypingClipboardHistory : 0;
+  return socket && socket->isPeerAuthenticated()
+             ? kReturnTypingText | kReturnTypingClipboardHistory | kReturnTypingShortcuts
+             : 0;
 }
 
 void Server::returnTyping(BaseClientProxy *client, KeyID key)
 {
-  if (!returnTypingCodeOffered(key, returnTypingOptions(client))) {
-    return;
-  }
-  if (key == kReturnTypingClipboardHistoryCode) {
-    m_primaryClient->returnTypingTap('v', KeyModifierSuper);
-  } else {
+  const auto options = returnTypingOptions(client);
+  if (const auto *shortcut = returnTypingShortcut(key, options)) {
+    m_primaryClient->returnTypingTap(shortcut->windowsKey, shortcut->windowsModifiers);
+  } else if ((options & kReturnTypingText) != 0 && isReturnTypingKey(key)) {
     m_primaryClient->returnTypingTap(key);
   }
 }
